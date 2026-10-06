@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-`default_nettype none /error proof
+`default_nettype none //error proof
 
 module tt_um_uwasic_onboarding_jayden_cho ( //declaration or initialization
 
