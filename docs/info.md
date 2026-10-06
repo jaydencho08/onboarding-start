@@ -9,12 +9,12 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
+This digital circuit is an SPI-controlled peripheral with PWM peripheral. The primary functions should be to register inputs and send out data
 
 ## How to test
 
-Explain how to use your project
+To use our project...
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+some external hardware we used is...
