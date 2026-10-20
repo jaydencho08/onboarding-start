@@ -7,6 +7,7 @@ from cocotb.triggers import RisingEdge
 from cocotb.triggers import ClockCycles
 from cocotb.types import Logic
 from cocotb.types import LogicArray
+from pwm_checks import check_pwm_frequency, check_pwm_duty
 
 async def await_half_sclk(dut):
     """Wait for the SCLK signal to go high or low."""
@@ -151,11 +152,11 @@ async def test_spi(dut):
 
 @cocotb.test()
 async def test_pwm_freq(dut):
-    # Write your test here
+    await check_pwm_frequency(dut)
     dut._log.info("PWM Frequency test completed successfully")
 
 
 @cocotb.test()
 async def test_pwm_duty(dut):
-    # Write your test here
+    await check_pwm_duty(dut)
     dut._log.info("PWM Duty Cycle test completed successfully")

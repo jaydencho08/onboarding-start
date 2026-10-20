@@ -16,8 +16,8 @@ module pwm_peripheral (
     output reg [15:0] out
 );
 
-    localparam clk_div_trig = 12; // Divide by (12+1)*256, yielding 3000 (3004.80769) Hz
-    reg [10:0] clk_counter;
+    localparam [3:0] clk_div_trig = 4'd12; // 10 MHz / (13 * 256) = 3004.80769 Hz
+    reg [3:0] clk_counter;
     reg [7:0] pwm_counter;
     wire pwm_signal = (pwm_duty_cycle == 8'hFF) ? 1'b1 : (pwm_counter < pwm_duty_cycle); // 253 is 98.82% 254 is 99.21%, 255 is 100%, not 99.61%
 
@@ -27,9 +27,9 @@ module pwm_peripheral (
             pwm_counter <= 0;
             clk_counter <= 0;
         end else begin
-            clk_counter <= clk_counter + 1;
+            clk_counter <= clk_counter + 4'd1;
             if (clk_counter == clk_div_trig) begin
-                pwm_counter <= pwm_counter + 1;
+                pwm_counter <= pwm_counter + 8'd1;
                 clk_counter <= 0;
             end
             out[7:0] <= en_reg_out_7_0;
