@@ -1,78 +1,57 @@
 ## How it works
 
-This design controls 16 static or PWM outputs through a write-only SPI peripheral.
-It uses a 10 MHz system clock and SPI mode 0 at approximately 100 kHz. Send each
-16-bit packet most-significant bit first: one write bit (`1`), seven address bits,
-then eight data bits. Read packets (`0`) and addresses outside `0x00`-`0x04` are ignored.
+This project uses SPI to control 16 outputs. Each output can be off, on, or PWM.
+The system clock is 10 MHz. SPI uses mode 0 at about 100 kHz.
 
-| Address | Register | Reset |
-| --- | --- | --- |
-| `0x00` | Output enables for `uo_out[7:0]` | `0x00` |
-| `0x01` | Output enables for `uio_out[7:0]` | `0x00` |
-| `0x02` | PWM enables for `uo_out[7:0]` | `0x00` |
-| `0x03` | PWM enables for `uio_out[7:0]` | `0x00` |
-| `0x04` | Shared PWM duty setting | `0x00` |
+The inputs are SCLK on ui_in[0], COPI on ui_in[1], and nCS on ui_in[2].
+The outputs are uo_out[7:0] and uio_out[7:0]. All uio pins are set to outputs.
 
-`ui_in[0]` is SCLK, `ui_in[1]` is COPI/MOSI, and `ui_in[2]` is active-low
-chip select. All bidirectional pins are configured as outputs (`uio_oe = 0xFF`).
-There is no CIPO/MISO output.
+Send 16 bits, most significant bit first: 1 write bit, 7 address bits, then 8
+data bits. A write bit of 0 is ignored. The registers are:
 
-Two flip-flops synchronize each SPI input into the system-clock domain. The
-receiver captures COPI on synchronized SCLK rising edges and commits the register
-only on the synchronized rising edge of chip select. Frames shorter or longer
-than 16 bits are rejected. Keep chip select low for the entire frame; provide at
-least 1 us of setup before the first clock and hold after the final clock, and
-at least 1 us high between frames. Nominal SCLK high/low times are each 5 us.
-Allow 1 us after releasing chip select before inspecting updated outputs.
+- 0x00: enable outputs 0 to 7
+- 0x01: enable outputs 8 to 15
+- 0x02: enable PWM on outputs 0 to 7
+- 0x03: enable PWM on outputs 8 to 15
+- 0x04: duty cycle for all PWM outputs
 
-An output-enable bit of zero forces its output low. When enabled, a pin is
-constant high if its PWM-enable bit is zero, or follows the shared PWM signal
-otherwise. The divider advances an eight-bit PWM counter every 13 clock cycles:
-`10,000,000 / (13 * 256) = 3004.807692 Hz`, within the 3 kHz +/-1% requirement.
-Duty is `setting / 256`, except `0xFF` explicitly gives 100%. `0x00` gives 0%.
-Duty and enable changes take effect immediately after the register update;
-changing them in the middle of a PWM period can shorten or lengthen that pulse.
-Measurements should use complete periods after the update has settled.
+The SPI inputs use two flip-flops each to sync with the system clock. Data is
+sampled on rising SCLK edges. Registers change when nCS goes high after exactly
+16 bits. Invalid addresses and messages with the wrong number of bits are ignored.
+Keep nCS low during the message. Leave at least 1 us before the first clock,
+after the last clock, and between messages. Use 5 us for each SCLK half-cycle.
+Wait 1 us after nCS goes high before checking the updated output.
 
-Active-low reset asynchronously clears the SPI state, all five registers, and
-the PWM counters/output. The provided PWM behavior is retained; its divider
-counter is sized to four bits, sufficient to count from 0 through 12.
+An output is low if its enable bit is 0. If enabled, it is high when PWM is off
+and follows PWM when PWM is on. Frequency is 10 MHz / (13 * 256), about 3004.8 Hz.
+Duty cycle is the register value divided by 256, except 255 gives 100%.
+Zero gives 0%. Updates can change a pulse partway through a period, so wait for
+the new setting to settle before measuring. Reset is active low and clears
+all five registers, the SPI state, and the PWM counters and outputs.
 
 ## How to test
 
-With Python 3.11, GNU Make, and Icarus Verilog installed:
+Install Python 3.11, make, and Icarus Verilog on Linux or WSL. From the repo:
 
-```sh
+```
 python -m pip install -r test/requirements.txt
 cd test
 make
 ```
 
-Use Linux or WSL for the Makefile. GitHub Actions runs the same tests on Ubuntu.
-The original SPI test is retained. Added checks cover:
+The tests check SPI writes, reads, invalid addresses, wrong message lengths,
+and reset. PWM tests check all 256 duty values, frequency from 2970 to 3030 Hz,
+and which outputs are enabled. Duty tolerance is one percentage point, with
+0 and 255 checked for constant low and high. The tests run on RTL and the
+gate-level netlist. Results are in results.xml and waveforms are in tb.vcd.
 
-- Measured rising-edge PWM frequency at five duty settings, within 2970-3030 Hz.
-- All 256 duty settings on all 16 pins, within one percentage point, with exact
-  always-low and always-high checks at the endpoints.
-- Static output, PWM output, disabled-output precedence, mixed masks, and each
-  output individually.
-- Atomic writes at chip-select release, read commands, every invalid address,
-  varied data and SPI phase, inactive chip select, malformed frames, and reset
-  during a transaction.
-
-Tests use only top-level ports, so the same suite runs against the synthesized
-gate-level netlist. `results.xml` contains the test results and `tb.vcd` contains
-port-level waveforms. The GitHub workflows build documentation, run RTL tests,
-generate GDS, run physical prechecks and gate-level tests, and deploy the layout
-viewer through GitHub Pages.
-
-For a bench check, send `0x80FF` and `0x81FF` to enable all outputs, `0x82FF` and
-`0x83FF` to enable PWM, then `0x8480` for 50% duty. Observe approximately 3 kHz on
-every output. Send `0x8400` for always low or `0x84FF` for always high.
+To try it on a board, send 0x80FF and 0x81FF to enable the outputs, then 0x82FF
+and 0x83FF to enable PWM. Send 0x8480 for 50%, 0x8400 for 0%, or 0x84FF for 100%.
+GitHub Actions runs the tests, builds the documentation and GDS, checks the
+layout, and publishes the viewer.
 
 ## External hardware
 
-A controller capable of SPI mode 0, a 10 MHz clock source, and a logic analyzer
-or oscilloscope are sufficient. LEDs require suitable current-limiting resistors;
-power loads require external drivers. Connect a common ground and use logic
-levels compatible with the Tiny Tapeout board.
+Use a mode-0 SPI controller, a 10 MHz clock, and a logic analyzer or oscilloscope.
+Use a common ground and the correct logic voltage for the Tiny Tapeout board.
+LEDs need resistors. Power loads need external drivers.

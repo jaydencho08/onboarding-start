@@ -4,7 +4,6 @@
  */
 `default_nettype none
 
-// Mode-0, MSB-first SPI receiver. All logic runs on the 10 MHz system clock.
 module spi_peripheral (
     input wire clk,
     input wire rst_n,
@@ -46,7 +45,6 @@ module spi_peripheral (
         end
     end
 
-    // One writer owns both the transaction state and the register bank.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             active <= 1'b0;
@@ -63,7 +61,7 @@ module spi_peripheral (
             bit_count <= 5'd0;
         end else if (ncs_rising) begin
             active <= 1'b0;
-            // Commit only a complete write when chip select is released.
+
             if (active && bit_count == 5'd16 && packet[15]) begin
                 case (packet[14:8])
                     7'h00: en_reg_out_7_0 <= packet[7:0];
@@ -71,13 +69,13 @@ module spi_peripheral (
                     7'h02: en_reg_pwm_7_0 <= packet[7:0];
                     7'h03: en_reg_pwm_15_8 <= packet[7:0];
                     7'h04: pwm_duty_cycle <= packet[7:0];
-                    default: begin end // Invalid addresses leave every register intact.
+                    default: begin end
                 endcase
             end
         end else if (active && !ncs_sync[1] && sclk_rising) begin
             if (bit_count < 5'd16)
                 packet <= {packet[14:0], copi_sync[1]};
-            // Saturate at 17 so oversized frames cannot wrap into valid frames.
+
             if (bit_count < 5'd17)
                 bit_count <= bit_count + 5'd1;
         end

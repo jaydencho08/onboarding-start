@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 Jayden Cho
 # SPDX-License-Identifier: Apache-2.0
-"""Black-box SPI/PWM checks shared by RTL and gate-level simulations."""
+
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, FallingEdge, Timer
@@ -9,10 +9,8 @@ from cocotb.utils import get_sim_time
 CLOCK_NS = 100
 PERIOD_CYCLES = 13 * 256
 
-
 def outputs(dut):
     return (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
-
 
 async def setup(dut):
     dut.ena.value = 1
@@ -28,14 +26,12 @@ async def setup(dut):
     assert outputs(dut) == 0, "Reset must disable every output"
     assert int(dut.uio_oe.value) == 0xFF
 
-
 async def finish_frame(dut):
     dut.ui_in.value = 4
     await Timer(1000, units="ns")
 
-
 async def frame(dut, bits, finish=True, half_ns=5000):
-    # Deliberately offset SPI transitions from system-clock edges.
+
     await Timer(37, units="ns")
     dut.ui_in.value = 0
     await Timer(1000, units="ns")
@@ -49,21 +45,17 @@ async def frame(dut, bits, finish=True, half_ns=5000):
     if finish:
         await finish_frame(dut)
 
-
 def packet_bits(address, data, write=True):
     word = (int(write) << 15) | (address << 8) | data
     return [(word >> bit) & 1 for bit in range(15, -1, -1)]
 
-
 async def write_register(dut, address, value):
     await frame(dut, packet_bits(address, value))
-
 
 async def configure(dut, enable=0xFFFF, pwm=0xFFFF, duty=128):
     for addr, value in enumerate((enable & 255, enable >> 8,
                                   pwm & 255, pwm >> 8, duty)):
         await write_register(dut, addr, value)
-
 
 async def check_pwm_frequency(dut):
     await setup(dut)
@@ -72,7 +64,7 @@ async def check_pwm_frequency(dut):
         await write_register(dut, 4, duty)
         previous = outputs(dut)
         edges = []
-        # Bounded sampling also turns a stuck output into a useful failure.
+
         for _ in range(3 * PERIOD_CYCLES):
             await FallingEdge(dut.clk)
             value = outputs(dut)
@@ -88,12 +80,10 @@ async def check_pwm_frequency(dut):
             assert 2970 <= frequency <= 3030, (duty, frequency)
         dut._log.info("Duty %d: measured PWM frequency %.6f Hz", duty, frequency)
 
-
 async def check_pwm_duty(dut):
     await setup(dut)
     await configure(dut)
-    # Two whole nominal periods remove phase dependence. Frequency is checked
-    # independently above, so an incorrect divider cannot hide in this average.
+
     samples = 2 * PERIOD_CYCLES
     for duty in range(256):
         await write_register(dut, 4, duty)
@@ -109,7 +99,6 @@ async def check_pwm_duty(dut):
         if duty in (0, 255):
             assert high == (samples if duty == 255 else 0), "Endpoint glitch"
     dut._log.info("All 256 duty settings passed on all 16 output pins")
-
 
 async def check_output_modes(dut, enable, pwm, duty):
     static = enable & ~pwm & 0xFFFF
